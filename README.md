@@ -55,12 +55,16 @@ Telegram-бот для сотрудников компании.
 
 
 TOKEN
+
 SPREADSHEET_NAME
+
 GOOGLE_CREDS_JSON
 
 
 ## Запуск
 
-Бот запускается через Railway.
+Бот запускается на сервере Railway.
+
+Команда запуска указана в файле Procfile:
 
 worker: python bot.py
