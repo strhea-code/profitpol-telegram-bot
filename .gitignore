@@ -1,0 +1,10 @@
+config.py
+.venv/
+__pycache__/
+*.pyc
+database.db
+*.xlsx
+documents/
+images/
+videos/
+Старые версии кода/
