@@ -341,16 +341,23 @@ def handle_message(message):
     if text == CONFIRM_BUTTON:
 
         if user_id not in user_data or "volume" not in user_data[user_id]:
-            bot.send_message(message.chat.id, "Нет данных для подтверждения. Нажмите /start")
+            bot.send_message(message.chat.id, "Эти данные уже были отправлены. Нажмите /start для новой записи.")
             return
 
         try:
             save_to_excel(user_id)
-            bot.send_message(message.chat.id, "✅ Данные успешно записаны в Excel.")
+
+            bot.send_message(
+                message.chat.id,
+                "✅ Данные успешно записаны.",
+                reply_markup=types.ReplyKeyboardRemove()
+            )
+
             del user_data[user_id]
 
         except Exception as e:
-            bot.send_message(message.chat.id, f"❌ Ошибка при записи в Excel: {e}")
+            print(f"Ошибка при записи: {e}")
+            bot.send_message(message.chat.id, "❌ Произошла ошибка при записи данных. Попробуйте позже.")
 
         return
 
