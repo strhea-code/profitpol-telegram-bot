@@ -1,12 +1,26 @@
 import telebot
 from telebot import types
-from openpyxl import load_workbook
 from datetime import datetime
 from zoneinfo import ZoneInfo
+import gspread
+from google.oauth2.service_account import Credentials
 
-from config import TOKEN, file_path
+from config import TOKEN, GOOGLE_CREDS_FILE, SPREADSHEET_NAME
 
 bot = telebot.TeleBot(TOKEN)
+
+SCOPES = [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive"
+]
+
+creds = Credentials.from_service_account_file(
+    GOOGLE_CREDS_FILE,
+    scopes=SCOPES
+)
+
+client = gspread.authorize(creds)
+spreadsheet = client.open(SPREADSHEET_NAME)
 
 # пустой словарь с ответами пользователя
 user_data = {}
@@ -22,50 +36,43 @@ CANCEL_BUTTON = 'Отмена'
 
 # создание списка объектов
 def load_object_list():
-    workbook = load_workbook(file_path)
-    sheet = workbook['Исходные данные']
+    sheet = spreadsheet.worksheet('Исходные данные')
+    values = sheet.col_values(13)  # колонка M
 
     object_list = []
 
-    for row in range(2, sheet.max_row + 1):
-        value = sheet[f'M{row}'].value
+    for value in values[1:]:
         if value:
             object_list.append(value)
 
-    workbook.close()
     return object_list
 
 
 # создание списка наименований работ
 def load_work_list():
-    workbook = load_workbook(file_path)
-    sheet = workbook['Исходные данные']
+    sheet = spreadsheet.worksheet('Исходные данные')
+    values = sheet.col_values(6)  # колонка F
 
     work_list = []
 
-    for row in range(2, sheet.max_row + 1):
-        value = sheet[f'F{row}'].value
+    for value in values[1:]:
         if value:
             work_list.append(value)
 
-    workbook.close()
     return work_list
 
 
 # чтение разрешенных Telegram ID из листа "Доступ"
 def load_allowed_users():
-    workbook = load_workbook(file_path)
-    sheet = workbook['Доступ']
+    sheet = spreadsheet.worksheet('Доступ')
+    values = sheet.col_values(2)  # колонка B
 
     allowed_users = []
 
-    for row in range(2, sheet.max_row + 1):
-        telegram_id = sheet[f'B{row}'].value
+    for value in values[1:]:
+        if value:
+            allowed_users.append(int(value))
 
-        if telegram_id:
-            allowed_users.append(int(telegram_id))
-
-    workbook.close()
     return allowed_users
 
 
@@ -77,18 +84,16 @@ def is_allowed_user(user_id):
 
 # функция получения ФИО по Telegram ID
 def get_fio_by_user_id(user_id):
-    workbook = load_workbook(file_path)
-    sheet = workbook['Доступ']
+    sheet = spreadsheet.worksheet('Доступ')
+    rows = sheet.get_all_values()
 
-    for row in range(2, sheet.max_row + 1):
-        fio = sheet[f'A{row}'].value
-        telegram_id = sheet[f'B{row}'].value
+    for row in rows[1:]:
+        fio = row[0] if len(row) > 0 else ''
+        telegram_id = row[1] if len(row) > 1 else ''
 
         if telegram_id and int(telegram_id) == user_id:
-            workbook.close()
             return fio
 
-    workbook.close()
     return None
 
 
@@ -139,36 +144,25 @@ def build_summary(user_id):
     )
 
 
-# функция поиска следующей пустой строки в листе "Начисления"
-def find_next_row(sheet):
-    for row in range(2, sheet.max_row + 2):
-        if (
-            sheet[f'A{row}'].value in (None, '') and
-            sheet[f'B{row}'].value in (None, '') and
-            sheet[f'D{row}'].value in (None, '') and
-            sheet[f'I{row}'].value in (None, '') and
-            sheet[f'K{row}'].value in (None, '')
-        ):
-            return row
-
-    return sheet.max_row + 1
-
-
 # функция записи данных в Excel
 def save_to_excel(user_id):
-    workbook = load_workbook(file_path)
-    sheet = workbook['Начисления']
+    sheet = spreadsheet.worksheet('Начисления')
 
-    next_row = find_next_row(sheet)
+    next_row = len(sheet.get_all_values()) + 1
 
-    sheet[f'A{next_row}'] = user_data[user_id]['fio']
-    sheet[f'B{next_row}'] = user_data[user_id]['object']
-    sheet[f'D{next_row}'] = user_data[user_id]['date']
-    sheet[f'I{next_row}'] = user_data[user_id]['work']
-    sheet[f'K{next_row}'] = user_data[user_id]['volume']
-
-    workbook.save(file_path)
-    workbook.close()
+    sheet.update(f'A{next_row}:K{next_row}', [[
+        user_data[user_id]['fio'],      # A
+        user_data[user_id]['object'],   # B
+        '',                             # C
+        user_data[user_id]['date'],     # D
+        '',                             # E
+        '',                             # F
+        '',                             # G
+        '',                             # H
+        user_data[user_id]['work'],     # I
+        '',                             # J
+        user_data[user_id]['volume']    # K
+    ]])
 
 
 # команда для просмотра своего Telegram ID
