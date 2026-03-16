@@ -9,11 +9,13 @@ from config import TOKEN, GOOGLE_CREDS_FILE, SPREADSHEET_NAME
 
 bot = telebot.TeleBot(TOKEN)
 
+# доступы для Google Sheets
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive"
 ]
 
+# подключение к Google Sheets
 creds = Credentials.from_service_account_file(
     GOOGLE_CREDS_FILE,
     scopes=SCOPES
@@ -22,7 +24,7 @@ creds = Credentials.from_service_account_file(
 client = gspread.authorize(creds)
 spreadsheet = client.open(SPREADSHEET_NAME)
 
-# пустой словарь с ответами пользователя
+# словарь для временного хранения данных пользователя
 user_data = {}
 
 # текст кнопок для выбора даты
@@ -34,13 +36,15 @@ CONFIRM_BUTTON = 'Подтвердить'
 CANCEL_BUTTON = 'Отмена'
 
 
-# создание списка объектов
+# функция загрузки списка объектов из листа "Исходные данные"
+# колонка M = 13
 def load_object_list():
     sheet = spreadsheet.worksheet('Исходные данные')
-    values = sheet.col_values(13)  # колонка M
+    values = sheet.col_values(13)
 
     object_list = []
 
+    # пропускаем первую строку, потому что там заголовок
     for value in values[1:]:
         if value:
             object_list.append(value)
@@ -48,13 +52,15 @@ def load_object_list():
     return object_list
 
 
-# создание списка наименований работ
+# функция загрузки списка работ из листа "Исходные данные"
+# колонка F = 6
 def load_work_list():
     sheet = spreadsheet.worksheet('Исходные данные')
-    values = sheet.col_values(6)  # колонка F
+    values = sheet.col_values(6)
 
     work_list = []
 
+    # пропускаем первую строку, потому что там заголовок
     for value in values[1:]:
         if value:
             work_list.append(value)
@@ -62,13 +68,15 @@ def load_work_list():
     return work_list
 
 
-# чтение разрешенных Telegram ID из листа "Доступ"
+# функция чтения разрешенных Telegram ID из листа "Доступ"
+# колонка B = Telegram ID
 def load_allowed_users():
     sheet = spreadsheet.worksheet('Доступ')
-    values = sheet.col_values(2)  # колонка B
+    values = sheet.col_values(2)
 
     allowed_users = []
 
+    # пропускаем первую строку, потому что там заголовок
     for value in values[1:]:
         if value:
             allowed_users.append(int(value))
@@ -76,10 +84,31 @@ def load_allowed_users():
     return allowed_users
 
 
-# функция проверки доступа
+# функция проверки доступа пользователя
 def is_allowed_user(user_id):
     allowed_users = load_allowed_users()
     return user_id in allowed_users
+
+
+# функция проверки, является ли пользователь админом
+# на листе "Доступ":
+# A = ФИО
+# B = Telegram ID
+# C = роль
+# если в колонке C написано admin, значит это админ
+def is_admin_user(user_id):
+    sheet = spreadsheet.worksheet('Доступ')
+    rows = sheet.get_all_values()
+
+    # пропускаем первую строку, потому что там заголовок
+    for row in rows[1:]:
+        telegram_id = row[1] if len(row) > 1 else ''
+        role = row[2].strip().lower() if len(row) > 2 and row[2] else ''
+
+        if telegram_id and int(telegram_id) == user_id and role == 'admin':
+            return True
+
+    return False
 
 
 # функция получения ФИО по Telegram ID
@@ -87,6 +116,7 @@ def get_fio_by_user_id(user_id):
     sheet = spreadsheet.worksheet('Доступ')
     rows = sheet.get_all_values()
 
+    # пропускаем первую строку, потому что там заголовок
     for row in rows[1:]:
         fio = row[0] if len(row) > 0 else ''
         telegram_id = row[1] if len(row) > 1 else ''
@@ -132,7 +162,7 @@ def format_volume(volume):
     return str(volume).replace('.', ',')
 
 
-# функция формирования итогового текста
+# функция формирования итогового текста перед подтверждением
 def build_summary(user_id):
     return (
         f"Проверьте введенные данные:\n\n"
@@ -144,25 +174,35 @@ def build_summary(user_id):
     )
 
 
-# функция записи данных в Excel
+# функция записи данных в лист "Начисления"
+# A = ФИО
+# B = объект
+# D = дата
+# I = наименование работ
+# K = объем
 def save_to_excel(user_id):
     sheet = spreadsheet.worksheet('Начисления')
 
+    # следующая строка = количество заполненных строк + 1
     next_row = len(sheet.get_all_values()) + 1
 
-    sheet.update(f'A{next_row}:K{next_row}', [[
-        user_data[user_id]['fio'],      # A
-        user_data[user_id]['object'],   # B
-        '',                             # C
-        user_data[user_id]['date'],     # D
-        '',                             # E
-        '',                             # F
-        '',                             # G
-        '',                             # H
-        user_data[user_id]['work'],     # I
-        '',                             # J
-        user_data[user_id]['volume']    # K
-    ]])
+    # записываем данные сразу в диапазон A:K
+    sheet.update(
+        values=[[
+            user_data[user_id]['fio'],      # A
+            user_data[user_id]['object'],   # B
+            '',                             # C
+            user_data[user_id]['date'],     # D
+            '',                             # E
+            '',                             # F
+            '',                             # G
+            '',                             # H
+            user_data[user_id]['work'],     # I
+            '',                             # J
+            user_data[user_id]['volume']    # K
+        ]],
+        range_name=f'A{next_row}:K{next_row}'
+    )
 
 
 # команда для просмотра своего Telegram ID
@@ -171,11 +211,70 @@ def myid_command(message):
     bot.send_message(message.chat.id, f"Ваш Telegram ID: {message.from_user.id}")
 
 
+# команда для просмотра всех записей за сегодня
+# доступна только пользователю с ролью admin
+@bot.message_handler(commands=['today_report'])
+def today_report_command(message):
+    user_id = message.from_user.id
+
+    # проверяем, что команду вызывает админ
+    if not is_admin_user(user_id):
+        bot.send_message(message.chat.id, "У вас нет доступа к этой команде.")
+        return
+
+    # берем сегодняшнюю дату
+    today = datetime.now(ZoneInfo("Europe/Moscow")).strftime("%d.%m.%Y")
+
+    try:
+        sheet = spreadsheet.worksheet('Начисления')
+        rows = sheet.get_all_values()
+
+        report_lines = []
+
+        # пропускаем первую строку, потому что там заголовок
+        for row in rows[1:]:
+            fio = row[0] if len(row) > 0 else ''
+            obj = row[1] if len(row) > 1 else ''
+            date = row[3] if len(row) > 3 else ''
+            work = row[8] if len(row) > 8 else ''
+            volume = row[10] if len(row) > 10 else ''
+
+            # берем только записи за сегодня
+            if date == today:
+                report_lines.append(
+                    f"ФИО: {fio}\n"
+                    f"Объект: {obj}\n"
+                    f"Работа: {work}\n"
+                    f"Объем: {volume}"
+                )
+
+        # если записей нет
+        if not report_lines:
+            bot.send_message(message.chat.id, f"За сегодня ({today}) записей нет.")
+            return
+
+        # собираем отчет
+        report_text = f"Отчет за сегодня ({today}):\n\n" + "\n\n".join(report_lines)
+
+        # если сообщение слишком длинное, режем на части
+        if len(report_text) > 4000:
+            parts = [report_text[i:i + 4000] for i in range(0, len(report_text), 4000)]
+            for part in parts:
+                bot.send_message(message.chat.id, part)
+        else:
+            bot.send_message(message.chat.id, report_text)
+
+    except Exception as e:
+        print(f"Ошибка в команде /today_report: {e}")
+        bot.send_message(message.chat.id, "❌ Не удалось сформировать отчет за сегодня.")
+
+
 # обработчик команды /start
 @bot.message_handler(commands=['start'])
 def start_command(message):
     user_id = message.from_user.id
 
+    # проверка доступа
     if not is_allowed_user(user_id):
         bot.send_message(
             message.chat.id,
@@ -184,13 +283,14 @@ def start_command(message):
         )
         return
 
+    # получаем ФИО по Telegram ID
     fio = get_fio_by_user_id(user_id)
 
     if not fio:
         bot.send_message(message.chat.id, "Не удалось определить ваше ФИО по Telegram ID.")
         return
 
-    # сохраняем ФИО автоматически
+    # сохраняем ФИО в словарь
     user_data[user_id] = {}
     user_data[user_id]["fio"] = fio
 
@@ -200,7 +300,7 @@ def start_command(message):
 
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
 
-    # создание кнопок с объектами
+    # создаем кнопки с объектами
     for obj in object_list:
         button = types.KeyboardButton(obj)
         markup.add(button)
@@ -208,12 +308,13 @@ def start_command(message):
     bot.send_message(message.chat.id, "Выберите объект:", reply_markup=markup)
 
 
-# реакция на сообщения пользователя
+# обработчик всех текстовых сообщений
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
     user_id = message.from_user.id
     text = message.text.strip()
 
+    # проверка доступа
     if not is_allowed_user(user_id):
         bot.send_message(
             message.chat.id,
@@ -316,7 +417,6 @@ def handle_message(message):
     if user_id in user_data and "work" in user_data[user_id] and "volume" not in user_data[user_id]:
 
         if validate_volume(text):
-
             user_data[user_id]["volume"] = normalize_volume(text)
 
             summary = build_summary(user_id)
@@ -341,7 +441,10 @@ def handle_message(message):
     if text == CONFIRM_BUTTON:
 
         if user_id not in user_data or "volume" not in user_data[user_id]:
-            bot.send_message(message.chat.id, "Эти данные уже были отправлены. Нажмите /start для новой записи.")
+            bot.send_message(
+                message.chat.id,
+                "Эти данные уже были отправлены. Нажмите /start для новой записи."
+            )
             return
 
         try:
@@ -357,7 +460,10 @@ def handle_message(message):
 
         except Exception as e:
             print(f"Ошибка при записи: {e}")
-            bot.send_message(message.chat.id, "❌ Произошла ошибка при записи данных. Попробуйте позже.")
+            bot.send_message(
+                message.chat.id,
+                "❌ Произошла ошибка при записи данных. Попробуйте позже."
+            )
 
         return
 
@@ -367,7 +473,11 @@ def handle_message(message):
         if user_id in user_data:
             del user_data[user_id]
 
-        bot.send_message(message.chat.id, "❌ Ввод данных отменен. Нажмите /start, чтобы начать заново.")
+        bot.send_message(
+            message.chat.id,
+            "❌ Ввод данных отменен. Нажмите /start, чтобы начать заново.",
+            reply_markup=types.ReplyKeyboardRemove()
+        )
         return
 
     bot.send_message(message.chat.id, "Пожалуйста, выберите вариант кнопкой или нажмите /start")
