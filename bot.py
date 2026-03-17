@@ -186,23 +186,12 @@ def save_to_excel(user_id):
     # следующая строка = количество заполненных строк + 1
     next_row = len(sheet.get_all_values()) + 1
 
-    # записываем данные сразу в диапазон A:K
-    sheet.update(
-        values=[[
-            user_data[user_id]['fio'],      # A
-            user_data[user_id]['object'],   # B
-            '',                             # C
-            user_data[user_id]['date'],     # D
-            '',                             # E
-            '',                             # F
-            '',                             # G
-            '',                             # H
-            user_data[user_id]['work'],     # I
-            '',                             # J
-            user_data[user_id]['volume']    # K
-        ]],
-        range_name=f'A{next_row}:K{next_row}'
-    )
+    # записываем только нужные ячейки
+    sheet.update_acell(f'A{next_row}', user_data[user_id]['fio'])
+    sheet.update_acell(f'B{next_row}', user_data[user_id]['object'])
+    sheet.update_acell(f'D{next_row}', user_data[user_id]['date'])
+    sheet.update_acell(f'I{next_row}', user_data[user_id]['work'])
+    sheet.update_acell(f'K{next_row}', user_data[user_id]['volume'])
 
 
 # команда для просмотра своего Telegram ID
