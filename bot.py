@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 import gspread
 from google.oauth2.service_account import Credentials
 
-from config import TOKEN, GOOGLE_CREDS_FILE, SPREADSHEET_NAME
+from config import TOKEN, GOOGLE_CREDS_FILE, SPREADSHEET_ID
 
 bot = telebot.TeleBot(TOKEN)
 
@@ -22,7 +22,7 @@ creds = Credentials.from_service_account_file(
 )
 
 client = gspread.authorize(creds)
-spreadsheet = client.open(SPREADSHEET_NAME)
+spreadsheet = client.open_by_key(SPREADSHEET_ID)
 
 # словарь для временного хранения данных пользователя
 user_data = {}
@@ -279,7 +279,7 @@ def start_command(message):
         bot.send_message(
             message.chat.id,
             "У вас нет доступа к этому боту.\n"
-            "Отправьте команду /myid и передайте ваш Telegram ID заказчику."
+            "Отправьте команду /myid и передайте ваш Telegram ID администратору."
         )
         return
 
