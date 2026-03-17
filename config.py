@@ -1,10 +1,9 @@
 import os
 
 TOKEN = os.getenv("TOKEN")
-SPREADSHEET_NAME = os.getenv("SPREADSHEET_NAME")
+SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
 
 GOOGLE_CREDS_FILE = "google_creds.json"
-
 GOOGLE_CREDS_JSON = os.getenv("GOOGLE_CREDS_JSON")
 
 if GOOGLE_CREDS_JSON:
