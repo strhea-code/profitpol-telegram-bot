@@ -184,7 +184,7 @@ def save_to_excel(user_id):
     sheet = spreadsheet.worksheet('Начисления')
 
     # следующая строка = количество заполненных строк + 1
-    next_row = len(sheet.get_all_values()) + 1
+    next_row = len(sheet.col_values(1)) + 1
 
     # записываем только нужные ячейки
     sheet.update_acell(f'A{next_row}', user_data[user_id]['fio'])
